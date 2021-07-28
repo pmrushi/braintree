@@ -1,0 +1,256 @@
+<div id="dropin-wrapper">
+    <div id="checkout-message"></div> </br>
+    Amount : <input type="text" id="amount" /> </br>
+    <div id="dropin-container"></div> </br>
+    <button id="venmo-button" style="display: none">Venmo payment</button></br>
+    <button id="submit-button">Submit payment</button>
+    <button id="partial-button">Partial payment</button>
+    <div id="paypal-button"></div>
+
+</div>
+<script>
+    var button = document.querySelector('#submit-button');
+    var partialButton = document.querySelector('#partial-button');
+    //var venmoButton = document.getElementById('venmo-button');
+    //console.log(venmoButton);
+/*
+    // Create a client.
+    braintree.client.create({
+        authorization: '<sandbox_key>'
+    }).then(function (clientInstance) {
+        // You may need to polyfill Promise
+        // if used on older browsers that
+        // do not natively support it.
+        console.log('1')
+        console.log(clientInstance)
+        return Promise.all([
+            braintree.dataCollector.create({
+                client: clientInstance,
+                paypal: true
+            }),
+            braintree.venmo.create({
+                client: clientInstance,
+                allowDesktop: true,
+                paymentMethodUsage: 'single_use' // available in v3.77.0+
+                // Add allowNewBrowserTab: false if your checkout page does not support
+                // relaunching in a new tab when returning from the Venmo app. This can
+                // be omitted otherwise.
+                // allowNewBrowserTab: false
+            })
+        ]);
+    }).then(function (results) {
+        console.log('2')
+        console.log(results)
+        var dataCollectorInstance = results[0];
+        var venmoInstance = results[1];
+
+        // At this point, you should access the deviceData value and provide it
+        // to your server, e.g. by injecting it into your form as a hidden input.
+        console.log('Got device data:', dataCollectorInstance.deviceData);
+
+        // Verify browser support before proceeding.
+        if (!venmoInstance.isBrowserSupported()) {
+            console.log('Browser does not support Venmo');
+            return;
+        }
+
+        displayVenmoButton(venmoInstance);
+
+        // Check if tokenization results already exist. This occurs when your
+        // checkout page is relaunched in a new tab. This step can be omitted
+        // if allowNewBrowserTab is false.
+        if (venmoInstance.hasTokenizationResult()) {
+            venmoInstance.tokenize().then(handleVenmoSuccess).catch(handleVenmoError);
+        }
+    });
+
+    function displayVenmoButton(venmoInstance) {
+        console.log('3')
+        console.log(venmoInstance)
+
+        // Assumes that venmoButton is initially display: none.
+        venmoButton.style.display = 'block';
+
+        venmoButton.addEventListener('click', function () {
+            venmoButton.disabled = true;
+
+            venmoInstance.tokenize().then(handleVenmoSuccess).catch(handleVenmoError).then(function () {
+                venmoButton.removeAttribute('disabled');
+            });
+        });
+    }
+
+    function handleVenmoError(err) {
+        if (err.code === 'VENMO_CANCELED') {
+            console.log('App is not available or user aborted payment flow');
+        } else if (err.code === 'VENMO_APP_CANCELED') {
+            console.log('User canceled payment flow');
+        } else {
+            console.error('An error occurred:', err.message);
+        }
+    }
+
+    function handleVenmoSuccess(payload) {
+        // Send the payment method nonce to your server, e.g. by injecting
+        // it into your form as a hidden input.
+        console.log('Got a payment method nonce:', payload.nonce);
+        // Display the Venmo username in your checkout UI.
+        console.log('Venmo user:', payload.details.username);
+    }
+*/
+
+    braintree.dropin.create({
+        // Insert your tokenization key here
+        authorization: 'sandbox_key',
+        container: '#dropin-container',
+        googlePay: {
+            googlePayVersion: 2,
+            transactionInfo: {
+                totalPriceStatus: 'FINAL',
+                totalPrice: 19,
+                currencyCode: 'USD'
+            },
+            allowedPaymentMethods: [{
+                type: 'CARD',
+                parameters: {
+                    // We recommend collecting and passing billing address information with all Google Pay transactions as a best practice.
+                    billingAddressRequired: true,
+                    billingAddressParameters: {
+                        format: 'FULL'
+                    }
+                }
+            }]
+        },
+        paypal: {
+            flow: 'checkout',
+            amount: 19,
+            currency: 'USD'
+        }
+    }, function (createErr, instance) {
+        var paymentOptions = instance.getAvailablePaymentOptions();
+        console.log(paymentOptions)
+
+        button.addEventListener('click', function () {
+            instance.requestPaymentMethod(function (requestPaymentMethodErr, payload) {
+                console.log(payload);
+                // When the user clicks on the 'Submit payment' button this code will send the
+                // encrypted payment information in a variable called a payment method nonce
+                $.ajax({
+                    type: 'POST',
+                    url: '/checkout',
+                    data: {'paymentMethodNonce': payload.nonce}
+                }).done(function(result) {
+                    // Tear down the Drop-in UI
+                    instance.teardown(function (teardownErr) {
+                        if (teardownErr) {
+                            console.error('Could not tear down Drop-in UI!');
+                        } else {
+                            console.info('Drop-in UI has been torn down!');
+                            // Remove the 'Submit payment' button
+                            $('#submit-button').remove();
+                        }
+                    });
+
+                    if (result.success) {
+                        $('#checkout-message').html('<h1>Success</h1><p>Your Drop-in UI is working! Check your <a href="https://sandbox.braintreegateway.com/login">sandbox Control Panel</a> for your test transactions.</p><p>Refresh to try another transaction.</p>');
+                    } else {
+                        console.log(result);
+                        $('#checkout-message').html('<h1>Error</h1><p>Check your console.</p>');
+                    }
+                });
+            });
+        });
+    });
+
+    partialButton.addEventListener('click', function () {
+        $.ajax({
+            type: 'POST',
+            url: '/partial',
+            data: {'paymentMethodNonce': "tokencc_bh_tnfskv_68xv5d_z948nt_4csfh7_bf3"}
+        }).done(function (result) {
+            console.log('================');
+            console.log(result);
+            // Tear down the Drop-in UI
+        });
+    });
+
+
+   /*
+    // Create a client.
+    braintree.client.create({
+        authorization: 'sandbox_key'
+    }).then(function (clientInstance) {
+        // Create a PayPal Checkout component.
+        return braintree.paypalCheckout.create({
+            client: clientInstance
+        });
+    }).then(function (paypalCheckoutInstance) {
+        return paypalCheckoutInstance.loadPayPalSDK({
+            currency: 'USD',
+            intent: 'capture'
+        });
+    }).then(function (paypalCheckoutInstance) {
+        return paypal.Buttons({
+            fundingSource: paypal.FUNDING.PAYPAL,
+
+            createOrder: function () {
+                return paypalCheckoutInstance.createPayment({
+                    flow: 'checkout', // Required
+                    amount: 10.00, // Required
+                    currency: 'USD', // Required, must match the currency passed in with loadPayPalSDK
+
+                    intent: 'capture', // Must match the intent passed in with loadPayPalSDK
+
+                    enableShippingAddress: true,
+                    shippingAddressEditable: false,
+                    shippingAddressOverride: {
+                        recipientName: 'Scruff McGruff',
+                        line1: '1234 Main St.',
+                        line2: 'Unit 1',
+                        city: 'Chicago',
+                        countryCode: 'US',
+                        postalCode: '60652',
+                        state: 'IL',
+                        phone: '123.456.7890'
+                    }
+                });
+            },
+
+            onApprove: function (data, actions) {
+                return paypalCheckoutInstance.tokenizePayment(data).then(function (payload) {
+                    console.log(payload);
+                    // Submit `payload.nonce` to your server
+
+                    $.ajax({
+                        type: 'POST',
+                        url: '/checkout',
+                        data: {'paymentMethodNonce': payload.nonce}
+                    }).done(function(result) {
+                        // Tear down the Drop-in UI
+                        if (result.success) {
+                            $('#checkout-message').html('<h1>Success</h1><p>Your Drop-in UI is working! Check your <a href="https://sandbox.braintreegateway.com/login">sandbox Control Panel</a> for your test transactions.</p><p>Refresh to try another transaction.</p>');
+                        } else {
+                            console.log(result);
+                            $('#checkout-message').html('<h1>Error</h1><p>Check your console.</p>');
+                        }
+                    });
+
+
+                });
+            },
+
+            onCancel: function (data) {
+                console.log('PayPal payment cancelled', JSON.stringify(data, 0, 2));
+            },
+
+            onError: function (err) {
+                console.error('PayPal error', err);
+            }
+        }).render('#paypal-button');
+    }).then(function () {
+        // The PayPal button will be rendered in an html element with the ID
+        // `paypal-button`. This function will be called when the PayPal button
+        // is set up and ready to be used
+    });
+*/
+</script>
